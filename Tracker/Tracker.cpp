@@ -13,6 +13,8 @@
 using namespace System;
 using namespace System::IO::Ports;
 using namespace std;
+using namespace cv;
+using SysString = System::String;
 
 double PCFreq = 0.0;
 __int64 CounterStart = 0;
@@ -35,28 +37,30 @@ double GetCounter()
 	return double(li.QuadPart - CounterStart) / PCFreq;
 }
 
-String^ TalkToArduino(SerialPort^ arduino)
+SysString^ TellArduino(SerialPort^ arduino, SysString^ message)
 {
+	// Writes message to serial port and returns the response. Clears serial buffer of subsequent "ok" or "errors" (for now)
+
 	// TODO Error handling 
-	String^ response;
-	String^ main_response;
+
+	SysString^ response;
+	SysString^ mainResponse; // This will be the one actually returned. Won't bother returning "ok"
 	do
 	{
 		response = arduino->ReadLine();
-		if (String::IsNullOrEmpty(main_response))
+		if (SysString::IsNullOrEmpty(mainResponse))
 		{
-			main_response = response;
+			mainResponse = response;
 		}
 
 	} while (!response->Equals("ok\r") && !response->Contains("error:"));
 
-	return main_response;
+	return mainResponse;
 }
 
 void ClearArduinoSerialBuf(SerialPort^ arduino)
 {
-	// TODO Error handling 
-	String^ response;
+	SysString^ response;
 	do
 	{
 		response = arduino->ReadLine();
@@ -72,8 +76,8 @@ int main(array<System::String ^> ^args)
 	serialfile.open("serialfile.txt");
 
 	// Configure serial comms for Arduino
-	String^ portName;
-	String^ response;
+	SysString^ portName;
+	SysString^ response;
 
 	SerialPort^ arduino;
 	int baudRate = 115200;
@@ -81,11 +85,26 @@ int main(array<System::String ^> ^args)
 	arduino = gcnew SerialPort(portName, baudRate);
 	arduino->Open();
 
+	// Set up image capture and processing
+	vector<vector<Point>> contours;
+	vector<Vec4i> heirarchy; // Not sure what this is for, but it makes findContours work
+
+	VideoCapture vidCap(CV_CAP_ANY);
+	vidCap.set(CV_CAP_PROP_FPS, 240); // Need to set the exposure time to appropriate value in Pylon Viewer as well
+	vidCap.set(CV_CAP_PROP_FRAME_HEIGHT, 200); // 200x200 window
+	vidCap.set(CV_CAP_PROP_FRAME_WIDTH, 200); 
+
 	// Set status report mask
 	arduino->WriteLine("$10=2");
 	ClearArduinoSerialBuf(arduino);
 
-	String^ input;
+	// @@@@@@ MAIN LOOP @@@@@
+	while (true)
+	{
+
+	}
+
+	SysString^ input;
 	while (true)
 	{
 		StartCounter();
