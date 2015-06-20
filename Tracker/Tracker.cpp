@@ -121,8 +121,14 @@ int main(array<System::String ^> ^args)
 	loop_time_file.open("loop_time.txt");
 	ofstream data_input_time_file;
 	data_input_time_file.open("data_input_time.txt");
+	data_input_time_file << "query command time, frame cap time, query respond time, image processing time\n";
 	ofstream command_time_file;
 	command_time_file.open("command_time.txt");
+	ofstream command_file;
+	command_file.open("commands.txt");
+	ofstream misc_time_file; // I just use this for logging timers that I might want to move around
+	misc_time_file.open("misc_times.txt");
+
 
 	StartCounter(); // For getting timing data
 	// Timers for stuff that might need them. Can add more later.
@@ -130,7 +136,7 @@ int main(array<System::String ^> ^args)
 	double loop_timer = GetCounter(); // This is the main timer to monitor the loop
 	double command_timer = GetCounter(); // Log how long it takes to write a move command into the buffer
 	double data_input_timer = GetCounter(); // Log how long it takes to grab a camera frame and the motor status
-	double test_timer1 = GetCounter();
+	double misc_timer = GetCounter();
 	double query_timer = GetCounter();
 	double arduino_command_timer = GetCounter(); // Timer used to send commands to 
 
@@ -142,7 +148,7 @@ int main(array<System::String ^> ^args)
 	SysString^ serial_message;
 
 	SerialPort^ arduino;
-	int baud_rate = 115200; //115200
+	int baud_rate = 500000; //115200
 	port_name = "com5";
 	arduino = gcnew SerialPort(port_name, baud_rate);
 	arduino->Open();
@@ -174,10 +180,13 @@ int main(array<System::String ^> ^args)
 	// Set status report mask, $10=2 means only return working position when queried (i.e. mm instead of motor counts), helps free up serial bandwidth
 	serial_response = arduino_tx_rx(arduino, "$10=2");
 	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$120=50");
+	serial_response = arduino_tx_rx(arduino, "$120=50"); // X accel
 	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$121=50");
+	serial_response = arduino_tx_rx(arduino, "$121=50"); // Y accel
+	Console::WriteLine(serial_response); 
+	serial_response = arduino_tx_rx(arduino, "F5000"); // Linear move feedrate
 	Console::WriteLine(serial_response);
+	serial_response = arduino_tx_rx(arduino, "G91"); // Setting for relative move commands
 	clear_serial_buffer(arduino, 1000);
 
 	// Initial jog (dunno why I have to do this right now)
@@ -198,16 +207,21 @@ int main(array<System::String ^> ^args)
 	boolean first_query = true;
 	while (true)
 	{
-		while (GetCounter() - query_timer < 1000.0 / 240)
+		while (GetCounter() - query_timer < 4.15)
 		{
 
 		}
+		loop_time_file << GetCounter() - query_timer << "\n";
 		query_timer = GetCounter(); // make sure there is a full period between loops
 		if (first_query)
+		{
+			data_input_timer = GetCounter();
 			arduino_tx(arduino, "?"); // Query Grbl status
+			data_input_time_file << GetCounter() - data_input_timer << ", ";
+		}
 		first_query = false;
 
-
+		data_input_timer = GetCounter();
 		vid_cap >> capped_frame;
 		if (capped_frame.empty())
 		{
@@ -218,10 +232,12 @@ int main(array<System::String ^> ^args)
 			getchar();
 			break;
 		}
+		data_input_time_file << GetCounter() - data_input_timer << ", ";
 
 		SysString^ grbl_status;
 		int grbl_state = 0;
 
+		data_input_timer = GetCounter();
 		do
 		{
 			grbl_status = arduino_rx(arduino);
@@ -246,6 +262,7 @@ int main(array<System::String ^> ^args)
 			getchar();
 			goto exit_main_loop;
 		}
+		data_input_time_file << GetCounter() - data_input_timer << ", ";
 
 		data_input_timer = GetCounter();
 		// Convert to monochrome
@@ -253,19 +270,21 @@ int main(array<System::String ^> ^args)
 		// Blur to reduce noise
 		blur(processed_frame, processed_frame, Size(10, 10));
 		// Threshold to convert to binary image for easier contouring
-		int binary_threshold = 36; // out of 255
+		int binary_threshold = 48; // out of 255
 		threshold(processed_frame, processed_frame, binary_threshold, 255, CV_THRESH_BINARY);
 
 		// Detect edges (I don't think the thresholds are that important here since the image has already been binarized. However, they are mandatory for the function call)
 		Mat processed_frame_edges;
 		int lower_canny_threshold=10;
 		int upper_canny_threshold = lower_canny_threshold*10;
+		misc_timer = GetCounter();
 		Canny(processed_frame, processed_frame_edges, lower_canny_threshold, upper_canny_threshold);
+		misc_time_file << GetCounter() - misc_timer << "\n";
 
 		// Detect contours
 		contours.clear(); // Clear upon each new iteration of the loop
 		findContours(processed_frame_edges, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
-		
+
 		// Find the largest contour by calculating all contour areas and picking the largest one
 		// TODO This doesn't work when the contour is concave, need to fix.
 		double largest_contour_area = 0;
@@ -318,9 +337,9 @@ int main(array<System::String ^> ^args)
 				is_following = false; //Just do this once because if it can't find the object anymore then I don't want the thing crashing
 			}
 		}
-
 		data_input_time_file << GetCounter() - data_input_timer << "\n";
-		SysString^ gcode_command = "0";
+
+		SysString^ gcode_command_type = "0";
 		
 		if (!stream_only && !console_enabled) // Don't move stuff if I just want to look at the camera or send manual commands
 		{
@@ -337,8 +356,8 @@ int main(array<System::String ^> ^args)
 				p_gain_x = 0.009;
 			else if (abs(dx) > 15)
 				p_gain_x = 0.006;
-			else if (abs(dx) > 5)
-				p_gain_x = 0.002;
+			//else if (abs(dx) > 5)
+			//	p_gain_x = 0.002;
 			else
 				p_gain_x = 0;
 
@@ -348,22 +367,23 @@ int main(array<System::String ^> ^args)
 				p_gain_y = 0.009;
 			else if (abs(dy) > 15)
 				p_gain_y = 0.006;
-			else if (abs(dy) > 5)
-				p_gain_y = 0.002;
+			//else if (abs(dy) > 5)
+			//	p_gain_y = 0.002;
 			else
 				p_gain_y = 0;
 
 			float x_command = -dx*p_gain_x;
 			float y_command = dy*p_gain_y;
 
-			if ((x_command != 0 || y_command != 0) && grbl_state == GRBL_STATE_IDLE && ready_to_send_next_move_cmd)
+			if ((x_command != 0 || y_command != 0) && grbl_state == GRBL_STATE_IDLE && ready_to_send_next_move_cmd && GetCounter() - command_timer > 1000/10)
 			{
-				SysString^ gcode_command = "G0 X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
+				SysString^ gcode_command = "G" + gcode_command_type + " X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
 				command_timer = GetCounter();
 				arduino_tx(arduino, gcode_command);
 				moves_in_queue++;
-				//command_time_file << GetCounter() - command_timer << "\n";
-				Console::WriteLine(GetCounter() - command_timer);
+				command_time_file << GetCounter() - command_timer << "\n";
+				//Console::WriteLine(GetCounter() - command_timer); 
+				//Console::WriteLine(moves_in_queue);
 				ready_to_send_next_move_cmd = false;
 			}
 		}
@@ -397,10 +417,12 @@ int main(array<System::String ^> ^args)
 			}
 		}
 
-		loop_time_file << GetCounter() - loop_timer << "\n";
-		loop_timer = GetCounter();
+		//loop_time_file << GetCounter() - loop_timer << "\n";
+		//loop_timer = GetCounter();
 
+		data_input_timer = GetCounter();
 		arduino_tx(arduino, "?"); // Query Grbl status
+		data_input_time_file << GetCounter() - data_input_timer << ", ";
 	}
 
 exit_main_loop:
