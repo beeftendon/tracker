@@ -205,9 +205,10 @@ int main(array<System::String ^> ^args)
 	boolean is_following = false; // for use when the contour leaves the frame
 	boolean ready_to_send_next_move_cmd = true;
 	boolean first_query = true;
+	UINT64 loop_counter = 0; // Counter for testing purposes
 	while (true)
 	{
-		while (GetCounter() - query_timer < 4.15)
+		while (GetCounter() - query_timer < 8.0)
 		{
 
 		}
@@ -243,7 +244,7 @@ int main(array<System::String ^> ^args)
 			grbl_status = arduino_rx(arduino);
 			if (grbl_status->Equals("ok\r"));
 			{
-				moves_in_queue--;
+				ready_to_send_next_move_cmd = true;
 			}
 		} while (grbl_status->Equals("ok\r"));
 
@@ -254,7 +255,6 @@ int main(array<System::String ^> ^args)
 		else if (grbl_status->Contains("Run"))
 		{
 			grbl_state = GRBL_STATE_RUN;
-			ready_to_send_next_move_cmd = true;
 		}
 		else
 		{
@@ -339,7 +339,7 @@ int main(array<System::String ^> ^args)
 		}
 		data_input_time_file << GetCounter() - data_input_timer << "\n";
 
-		SysString^ gcode_command_type = "0";
+		SysString^ gcode_command_type = "1";
 		
 		if (!stream_only && !console_enabled) // Don't move stuff if I just want to look at the camera or send manual commands
 		{
@@ -351,31 +351,31 @@ int main(array<System::String ^> ^args)
 			float p_gain_x; // Proportional gain for x-axis
 			float p_gain_y; // Proportional gain for y-axis
 			if (abs(dx) > 80)
-				p_gain_x = 0.01;
+				p_gain_x = 0.008;
 			else if (abs(dx) > 50)
-				p_gain_x = 0.009;
+				p_gain_x = 0.004;
 			else if (abs(dx) > 15)
-				p_gain_x = 0.006;
-			//else if (abs(dx) > 5)
-			//	p_gain_x = 0.002;
+				p_gain_x = 0.002;
+			else if (abs(dx) > 5)
+				p_gain_x = 0.001;
 			else
-				p_gain_x = 0;
+				p_gain_x = 0.0005;
 
 			if (abs(dy) > 80)
-				p_gain_y = 0.01;
+				p_gain_y = 0.008;
 			else if (abs(dy) > 50)
-				p_gain_y = 0.009;
+				p_gain_y = 0.004;
 			else if (abs(dy) > 15)
-				p_gain_y = 0.006;
-			//else if (abs(dy) > 5)
-			//	p_gain_y = 0.002;
+				p_gain_y = 0.002;
+			else if (abs(dy) > 5)
+				p_gain_y = 0.001;
 			else
-				p_gain_y = 0;
+				p_gain_y = 0.0005;
 
 			float x_command = -dx*p_gain_x;
 			float y_command = dy*p_gain_y;
 
-			if ((x_command != 0 || y_command != 0) && grbl_state == GRBL_STATE_IDLE && ready_to_send_next_move_cmd && GetCounter() - command_timer > 1000/10)
+			if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 1000 / 5)
 			{
 				SysString^ gcode_command = "G" + gcode_command_type + " X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
 				command_timer = GetCounter();
@@ -423,6 +423,8 @@ int main(array<System::String ^> ^args)
 		data_input_timer = GetCounter();
 		arduino_tx(arduino, "?"); // Query Grbl status
 		data_input_time_file << GetCounter() - data_input_timer << ", ";
+
+		loop_counter++;
 	}
 
 exit_main_loop:
