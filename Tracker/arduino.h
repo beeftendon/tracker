@@ -8,6 +8,9 @@ struct GrblStatus
 	double x;
 	double y;
 	double z; // Unused but eh, the data is there
+
+public:
+	GrblStatus parse_grbl_status(System::String^ query_response);
 } ;
 
 // Grbl states

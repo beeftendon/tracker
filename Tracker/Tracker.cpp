@@ -195,17 +195,21 @@ int main(array<System::String ^> ^args)
 	//while (GetCounter() - move_init_timer < 2000);
 	//arduino_tx_rx(arduino, "G0 X-1");
 
-	// @@@@@@ MAIN LOOP @@@@@@
+	// @@@@@@ MAIN LOOP SETUP @@@@@@
 	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
 								 // If I ever implement multithreading, then I might be able to turn this on permanently
 	bool stream_only = false; // Enable just for camera testing without any motion
 	bool console_enabled = false; // Enable to allow access to the console to send G-code manually to the Arduino
 								  // Streaming will be gimped if it's enabled at the same time (until I enable multithreading)
 
+	GrblStatus grbl_status;
+
 	boolean is_following = false; // for use when the contour leaves the frame
 	boolean ready_to_send_next_move_cmd = true;
 	boolean first_query = true;
 	UINT64 loop_counter = 0; // Counter for testing purposes
+
+	// @@@@@@ MAIN LOOP @@@@@@
 	while (true)
 	{
 		while (GetCounter() - query_timer < 8.0)
@@ -235,30 +239,31 @@ int main(array<System::String ^> ^args)
 		}
 		data_input_time_file << GetCounter() - data_input_timer << ", ";
 
-		SysString^ grbl_status;
+		SysString^ query_status_response;
 		int grbl_state = 0;
 
 		data_input_timer = GetCounter();
 		do
 		{
-			grbl_status = arduino_rx(arduino);
-			if (grbl_status->Equals("ok\r"));
+			query_status_response = arduino_rx(arduino);
+			if (query_status_response->Equals("ok\r"));
 			{
 				ready_to_send_next_move_cmd = true;
 			}
-		} while (grbl_status->Equals("ok\r"));
+		} while (query_status_response->Equals("ok\r"));
+		grbl_status = parse_grbl_status(query_status_response);
 
-		if (grbl_status->Contains("Idle"))
+		if (query_status_response->Contains("Idle"))
 		{
 			grbl_state = GRBL_STATE_IDLE;
 		}
-		else if (grbl_status->Contains("Run"))
+		else if (query_status_response->Contains("Run"))
 		{
 			grbl_state = GRBL_STATE_RUN;
 		}
 		else
 		{
-			Console::WriteLine(grbl_status);
+			Console::WriteLine(query_status_response);
 			getchar();
 			goto exit_main_loop;
 		}
