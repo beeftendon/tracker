@@ -20,4 +20,6 @@ GrblStatus parse_grbl_status(String^ query_response)
 	grbl_status.x = Convert::ToInt32(response_array[1]);
 	grbl_status.y = Convert::ToInt32(response_array[2]);
 	grbl_status.z = Convert::ToInt32(response_array[3]);
+
+	return grbl_status;
 }

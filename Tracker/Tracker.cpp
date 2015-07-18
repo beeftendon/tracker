@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
+#include <process.h>
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -13,6 +14,7 @@
 
 using namespace System;
 using namespace System::IO::Ports;
+using namespace System::Threading;
 using namespace std;
 using namespace cv;
 using SysString = System::String;
@@ -114,6 +116,22 @@ void clear_serial_buffer(SerialPort^ arduino, int timeout = 1)
 	return;
 }
 
+void cameraDisplayLoop(void *param)
+{
+	Mat* frame = (Mat*)param;
+	namedWindow("Camera Display");
+
+	while (1){
+		imshow("Camera Display", frame);
+		waitKey(1);
+	}
+}
+
+void test(void *param)
+{
+
+}
+
 int main(array<System::String ^> ^args)
 {
 	// Set up files for testing and loggin
@@ -208,7 +226,11 @@ int main(array<System::String ^> ^args)
 	boolean ready_to_send_next_move_cmd = true;
 	boolean first_query = true;
 	UINT64 loop_counter = 0; // Counter for testing purposes
-
+	
+	// Start threads
+	DWORD cameraDisplayThreadID;
+	_beginthread(NULL, 0, cameraDisplayLoop);
+	//thread camera_display_thread(cameraDisplayLoop, capped_frame); // Hopefully this allows the camera display to work without slowing down the main loop
 	// @@@@@@ MAIN LOOP @@@@@@
 	while (true)
 	{
@@ -246,6 +268,7 @@ int main(array<System::String ^> ^args)
 		do
 		{
 			query_status_response = arduino_rx(arduino);
+			grbl_status = parse_grbl_status(arduino_rx(arduino));
 			if (query_status_response->Equals("ok\r"));
 			{
 				ready_to_send_next_move_cmd = true;
@@ -434,10 +457,16 @@ int main(array<System::String ^> ^args)
 
 exit_main_loop:
 
+
+	// End threads
+	//camera_display_thread.join();
+
+	// Close files
 	loop_time_file.close();
 	command_time_file.close();
 	data_input_time_file.close();
 	Console::Clear();
+
 
 	arduino->Close();
 

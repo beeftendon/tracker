@@ -2,7 +2,7 @@
 
 struct GrblStatus 
 {
-	int state; // See Grbl states for enumerated values
+	int state=-1; // See Grbl states for enumerated values
 	
 	// Positions in working units
 	double x;
