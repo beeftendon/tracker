@@ -116,13 +116,13 @@ void clear_serial_buffer(SerialPort^ arduino, int timeout = 1)
 	return;
 }
 
-void cameraDisplayLoop(void *param)
+void cameraDisplayLoop(void * param)
 {
-	Mat* frame = (Mat*)param;
+	Mat * frame = (Mat *) param;
 	namedWindow("Camera Display");
 
 	while (1){
-		imshow("Camera Display", frame);
+		imshow("Camera Display", *frame);
 		waitKey(1);
 	}
 }
@@ -228,9 +228,7 @@ int main(array<System::String ^> ^args)
 	UINT64 loop_counter = 0; // Counter for testing purposes
 	
 	// Start threads
-	DWORD cameraDisplayThreadID;
-	_beginthread(NULL, 0, cameraDisplayLoop);
-	//thread camera_display_thread(cameraDisplayLoop, capped_frame); // Hopefully this allows the camera display to work without slowing down the main loop
+	HANDLE camera_display_handle = (HANDLE) _beginthread(cameraDisplayLoop, 0, &capped_frame); // Hopefully this allows the camera display to work without slowing down the main loop
 	// @@@@@@ MAIN LOOP @@@@@@
 	while (true)
 	{
@@ -459,7 +457,7 @@ exit_main_loop:
 
 
 	// End threads
-	//camera_display_thread.join();
+	CloseHandle(camera_display_handle);
 
 	// Close files
 	loop_time_file.close();
