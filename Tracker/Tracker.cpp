@@ -174,6 +174,10 @@ int main(array<System::String ^> ^args)
 	port_name = "com4";
 	arduino = gcnew SerialPort(port_name, baud_rate);
 	arduino->Open();
+
+	// Motor parameters
+	double mm_per_cts_x = 0.165;
+	double mm_per_cts_y = 0.165;
 	
 
 	// Define some OpenCV primary colors for convenience
@@ -189,7 +193,7 @@ int main(array<System::String ^> ^args)
 	Mat capped_frame; // This is the original, unprocessed, captured frame from the camera. 
 					 // Keeping it separate from the subsequent processing because sometimes it's useful to have the original.
 	Mat processed_frame; // This is the one that will be processed and used to find contours on
-
+	
 	VideoCapture vid_cap(CV_CAP_ANY); // This is sufficient for a single camera setup. Otherwise, it will need to be more specific.
 	vid_cap.set(CV_CAP_PROP_FPS, 240); // Need to set the exposure time to appropriate value in Pylon Viewer as well
 	vid_cap.set(CV_CAP_PROP_FRAME_HEIGHT, 200); // 200x200 window
@@ -200,16 +204,20 @@ int main(array<System::String ^> ^args)
 	Console::WriteLine(serial_response);
 	serial_response = arduino_tx_rx(arduino, "$1=255");
 	Console::WriteLine(serial_response);
-	// Set status report mask, $10=2 means only return working position when queried (i.e. mm instead of motor counts), helps free up serial bandwidth
-	serial_response = arduino_tx_rx(arduino, "$10=2");
+	// Set status report mask, $10=1 means only return absolute position when queried, helps free up serial bandwidth
+	serial_response = arduino_tx_rx(arduino, "$10=1");
 	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$100=0.9");
+	serial_response = arduino_tx_rx(arduino, "$100=1.65");
 	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$101=1.5");
+	serial_response = arduino_tx_rx(arduino, "$101=1.65");
 	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$120=50"); // X accel
+	serial_response = arduino_tx_rx(arduino, "$110=5000"); // X max rate (mm/min)
 	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$121=50"); // Y accel
+	serial_response = arduino_tx_rx(arduino, "$111=5000"); // Y max rate (mm/min)
+	Console::WriteLine(serial_response);
+	serial_response = arduino_tx_rx(arduino, "$120=500"); // X accel
+	Console::WriteLine(serial_response);
+	serial_response = arduino_tx_rx(arduino, "$121=500"); // Y accel
 	Console::WriteLine(serial_response); 
 	serial_response = arduino_tx_rx(arduino, "F5000"); // Linear move feedrate
 	Console::WriteLine(serial_response);
@@ -373,8 +381,9 @@ int main(array<System::String ^> ^args)
 			// Change the frame this is assigned to to change what you want to look at
 
 			Point2f origin = Point2f(100, 100); // Center of the frame. (0, 0) is usually the upper left corner. Define this because offset will be relative to "origin"
-			int dx = 0, last_dx;
-			int dy = 0, last_dy;
+			double dx = 0, last_dx;
+			double dy = 0, last_dy;
+			double dr = 0, last_dr;
 			if (!object_external_contour.empty()) // Only do the following if there's a contour to work with, otherwise just skip to the next frame
 			{
 				// Find and add bounding ellipse to the drawing
@@ -391,9 +400,10 @@ int main(array<System::String ^> ^args)
 
 				dx = last_dx = object_coord.x - origin.x; // Offset of the object centroid in x
 				dy = last_dy = object_coord.y - origin.y; // Offset of the object centroid in y
+				dr = last_dr = sqrt(dx*dx + dy*dy);
 
-				fly_position.x = (grbl_status.x + dx)/25;
-				fly_position.y = (grbl_status.y + dy)/25;
+				fly_position.x = grbl_status.x*mm_per_cts_x + dx/25;
+				fly_position.y = grbl_status.y*mm_per_cts_y + dy/25;
 				is_following = true;
 			}
 			else
@@ -445,7 +455,7 @@ int main(array<System::String ^> ^args)
 				float x_command = -fly_position.x;
 				float y_command = fly_position.y;
 
-				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 1000 / 1)
+				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 1000 / 1 && dr > 0)
 				{
 					SysString^ gcode_command = "G" + gcode_command_type + " X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
 					command_timer = GetCounter();

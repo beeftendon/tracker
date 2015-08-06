@@ -8,7 +8,7 @@ GrblStatus parse_grbl_status(String^ query_response)
 	GrblStatus grbl_status;
 	String^ query_response_edited;
 
-	query_response_edited = query_response->Replace("WPos:", ""); // Remove labels and punctuation in the string to make it easier to split based on delimiter
+	query_response_edited = query_response->Replace("MPos:", ""); // Remove labels and punctuation in the string to make it easier to split based on delimiter
 	query_response_edited = query_response_edited->Replace("<", "");
 	query_response_edited = query_response_edited->Replace(">", "");
 
