@@ -1,6 +1,6 @@
 #include <Windows.h>
 
-struct GrblStatus 
+struct GrblStatus
 {
 	int state=-1; // See Grbl states for enumerated values
 	
