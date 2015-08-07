@@ -130,11 +130,6 @@ void cameraDisplayLoop(void * param)
 	}
 }
 
-void test(void *param)
-{
-
-}
-
 int main(array<System::String ^> ^args)
 {
 	// Set up files for testing and logging
@@ -176,8 +171,8 @@ int main(array<System::String ^> ^args)
 	arduino->Open();
 
 	// Motor parameters
-	double mm_per_cts_x = 0.165;
-	double mm_per_cts_y = 0.165;
+	double mm_per_cts_x = 1.65;
+	double mm_per_cts_y = 1.65;
 	
 
 	// Define some OpenCV primary colors for convenience
@@ -225,12 +220,6 @@ int main(array<System::String ^> ^args)
 	clear_serial_buffer(arduino, 1000);
 	serial_response = arduino_tx_rx(arduino, "G90"); // Setting for relative move commands
 	clear_serial_buffer(arduino, 1000);
-
-	// Initial jog (dunno why I have to do this right now)
-	//arduino_tx_rx(arduino, "G0 X1");
-	//move_init_timer = GetCounter();
-	//while (GetCounter() - move_init_timer < 2000);
-	//arduino_tx_rx(arduino, "G0 X-1");
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
 	bool stream_enabled = true; // Whether or not to display streaming window for testing purposes
