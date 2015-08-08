@@ -1,6 +1,4 @@
-#include <Windows.h>
-
-// Stuff for storing and processing grbl status upon query command ("?")
+// Stuff for storing grbl status upon query command ("?")
 struct GrblStatus
 {
 	int state=-1; // See Grbl states for enumerated values
@@ -9,9 +7,6 @@ struct GrblStatus
 	double x;
 	double y;
 	double z; // Unused but eh, the data is there
-
-public:
-	GrblStatus parse_grbl_status(System::String^ query_response);
 } ;
 
 // Grbl states
@@ -23,4 +18,11 @@ GrblStatus parse_grbl_status(System::String^ query_response);
 
 
 // Arduino/Grbl initialization
-void initialize_grbl(System::IO::Ports::SerialPort arduino_port);
+void initialize_grbl(System::IO::Ports::SerialPort^ arduino_port);
+
+/* ARDUINO SERIAL COMMUNICATION FUNCTIONS
+These are used to transmit and receive messages to and from the Arduino via serial.
+*/
+void arduino_tx(System::IO::Ports::SerialPort^ arduino, System::String^ message);
+System::String^ arduino_rx(System::IO::Ports::SerialPort^ arduino, int timeout = System::IO::Ports::SerialPort::InfiniteTimeout);
+System::String^ arduino_tx_rx(System::IO::Ports::SerialPort^ arduino, System::String^ serial_message, int timeout = System::IO::Ports::SerialPort::InfiniteTimeout);

@@ -43,62 +43,6 @@ double GetCounter()
 	return double(li.QuadPart - CounterStart) / PCFreq;
 }
 
-void arduino_tx(SerialPort^ arduino, SysString^ message)
-{
-	arduino->WriteLine(message);
-	return;
-}
-
-SysString^ arduino_rx(SerialPort^ arduino, int timeout = SerialPort::InfiniteTimeout)
-{
-	SysString^ serial_response;
-	SysString^ main_response;
-
-	arduino->ReadTimeout = timeout;
-	try
-	{
-		do
-		{
-			serial_response = arduino->ReadLine();
-			if (SysString::IsNullOrEmpty(main_response))
-			{
-				main_response = serial_response;
-			}
-
-		} while (!serial_response->Equals("ok\r") && !serial_response->Contains("error:"));
-	}
-	catch (TimeoutException^ exception)
-	{
-		arduino->ReadTimeout = SerialPort::InfiniteTimeout;
-		throw exception;
-	}
-
-	arduino->ReadTimeout = SerialPort::InfiniteTimeout;
-	return main_response;
-}
-SysString^ arduino_tx_rx(SerialPort^ arduino, SysString^ serial_message)
-{
-	// Writes message to serial port and returns the response. Clears serial buffer of subsequent "ok" or "errors" (for now)
-
-	// TODO Error handling 
-
-	arduino->WriteLine(serial_message);
-
-	SysString^ serial_response;
-	SysString^ mainResponse; // This will be the one actually returned. Won't bother returning "ok"
-	do
-	{
-		serial_response = arduino->ReadLine();
-		if (SysString::IsNullOrEmpty(mainResponse))
-		{
-			mainResponse = serial_response;
-		}
-
-	} while (!serial_response->Equals("ok\r") && !serial_response->Contains("error:"));
-
-	return mainResponse;
-}
-
 void clear_serial_buffer(SerialPort^ arduino, int timeout = 1)
 {
 	arduino->ReadTimeout = timeout;
@@ -110,12 +54,12 @@ void clear_serial_buffer(SerialPort^ arduino, int timeout = 1)
 			response = arduino->ReadLine();
 		} while (!response->Equals("ok\r") && !response->Contains("error:"));
 	}
-	catch (TimeoutException^ exception)
+	catch (TimeoutException^)
 	{
-		arduino->SerialPort::InfiniteTimeout;
+		arduino->ReadTimeout = SerialPort::InfiniteTimeout;
 		return;
 	}
-	arduino->SerialPort::InfiniteTimeout;
+	arduino->ReadTimeout = SerialPort::InfiniteTimeout;
 	return;
 }
 
@@ -194,45 +138,20 @@ int main(array<System::String ^> ^args)
 	vid_cap.set(CV_CAP_PROP_FRAME_HEIGHT, 200); // 200x200 window
 	vid_cap.set(CV_CAP_PROP_FRAME_WIDTH, 200); 
 
-	// Disable delay between motor moves
-	serial_response = arduino_tx_rx(arduino, "?");
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$1=255");
-	Console::WriteLine(serial_response);
-	// Set status report mask, $10=1 means only return absolute position when queried, helps free up serial bandwidth
-	serial_response = arduino_tx_rx(arduino, "$10=1");
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$100=1.65");
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$101=1.65");
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$110=5000"); // X max rate (mm/min)
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$111=5000"); // Y max rate (mm/min)
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$120=500"); // X accel
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "$121=500"); // Y accel
-	Console::WriteLine(serial_response); 
-	serial_response = arduino_tx_rx(arduino, "F5000"); // Linear move feedrate
-	Console::WriteLine(serial_response);
-	serial_response = arduino_tx_rx(arduino, "G20"); // Setting for sending commands in working units (mm)
-	clear_serial_buffer(arduino, 1000);
-	serial_response = arduino_tx_rx(arduino, "G90"); // Setting for relative move commands
-	clear_serial_buffer(arduino, 1000);
+	initialize_grbl(arduino);
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
-	bool stream_enabled = true; // Whether or not to display streaming window for testing purposes
+	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
 								 // If I ever implement multithreading, then I might be able to turn this on permanently
 	bool stream_only = false; // Enable just for camera testing without any motion
-	bool console_enabled = false; // Enable to allow access to the console to send G-code manually to the Arduino
+	bool console_enabled = true; // Enable to allow access to the console to send G-code manually to the Arduino
 								  // Streaming will be gimped if it's enabled at the same time (until I enable multithreading)
 
 	GrblStatus grbl_status;
 
-	boolean is_following = false; // for use when the contour leaves the frame
-	boolean ready_to_send_next_move_cmd = true;
-	boolean first_query = true;
+	bool is_following = false; // for use when the contour leaves the frame
+	bool ready_to_send_next_move_cmd = true;
+	bool first_query = true;
 	UINT64 loop_counter = 0; // Counter for testing purposes
 	int video_counter = 0; // Write to video every x iterations of loop
 	
@@ -257,7 +176,7 @@ int main(array<System::String ^> ^args)
 				}
 
 			}
-			catch (TimeoutException^ exception)
+			catch (TimeoutException^)
 			{
 
 			}
@@ -417,8 +336,8 @@ int main(array<System::String ^> ^args)
 
 				// This is my janky control system that will definitely need to be improved
 
-				float p_gain_x; // Proportional gain for x-axis
-				float p_gain_y; // Proportional gain for y-axis
+				double p_gain_x; // Proportional gain for x-axis
+				double p_gain_y; // Proportional gain for y-axis
 				if (abs(dx) > 80)
 					p_gain_x = 0.008;
 				else if (abs(dx) > 50)
@@ -441,8 +360,8 @@ int main(array<System::String ^> ^args)
 				else
 					p_gain_y = 0.0005;
 
-				float x_command = -fly_position.x;
-				float y_command = fly_position.y;
+				double x_command = -fly_position.x;
+				double y_command = fly_position.y;
 
 				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 1000 / 1 && dr > 0)
 				{
@@ -480,7 +399,7 @@ int main(array<System::String ^> ^args)
 					}
 
 				}
-				catch (TimeoutException^ exception)
+				catch (TimeoutException^)
 				{
 
 				}
