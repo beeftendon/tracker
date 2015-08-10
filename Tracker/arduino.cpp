@@ -43,7 +43,7 @@ void initialize_grbl(System::IO::Ports::SerialPort^ arduino_port)
 	serial_response = arduino_tx_rx(arduino_port, "$100=1.65"); // X axis resolution (motor counts/mm)
 	System::Console::WriteLine("$100=1.65, " + serial_response);
 
-	serial_response = arduino_tx_rx(arduino_port, "$101=1.65"); // Y axis resolution (motor counts/mm)
+	serial_response = arduino_tx_rx(arduino_port, "$101=40"); // Y axis resolution (motor counts/mm)
 	System::Console::WriteLine("$101=1.65, " + serial_response);
 
 	serial_response = arduino_tx_rx(arduino_port, "$110=50000"); // X max rate (mm/min)
@@ -52,17 +52,17 @@ void initialize_grbl(System::IO::Ports::SerialPort^ arduino_port)
 	serial_response = arduino_tx_rx(arduino_port, "$111=50000"); // Y max rate (mm/min)
 	System::Console::WriteLine("$111=5000, " + serial_response);
 
-	serial_response = arduino_tx_rx(arduino_port, "$120=5000"); // X accel (mm/s^2)
+	serial_response = arduino_tx_rx(arduino_port, "$120=2000"); // X accel (mm/s^2)
 	System::Console::WriteLine("$120=500, " + serial_response);
 
-	serial_response = arduino_tx_rx(arduino_port, "$121=5000"); // Y accel (mm/s^2)
+	serial_response = arduino_tx_rx(arduino_port, "$121=2000"); // Y accel (mm/s^2)
 	System::Console::WriteLine("$121=500, " + serial_response);
 
 	serial_response = arduino_tx_rx(arduino_port, "F50000"); // Linear move feedrate (mm/min)
 	System::Console::WriteLine("F5000, " + serial_response);
 
-	serial_response = arduino_tx_rx(arduino_port, "G20"); // Setting for sending commands working units or motor counts (G20 = working, G21 = counts)
-	System::Console::WriteLine("G20, " + serial_response);
+	serial_response = arduino_tx_rx(arduino_port, "G21"); // Setting for units (G20 = in, G21 = mm)
+	System::Console::WriteLine("G21, " + serial_response);
 
 	serial_response = arduino_tx_rx(arduino_port, "G90"); // Setting for absolute or relative move commands (G90 = absolute, G91 = relative
 	System::Console::WriteLine("G90, " + serial_response);

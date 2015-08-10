@@ -116,7 +116,7 @@ int main(array<System::String ^> ^args)
 
 	// Motor parameters
 	double mm_per_cts_x = 1.65;
-	double mm_per_cts_y = 1.65;
+	double mm_per_cts_y = 40;
 	
 
 	// Define some OpenCV primary colors for convenience
@@ -141,10 +141,10 @@ int main(array<System::String ^> ^args)
 	initialize_grbl(arduino);
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
-	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
+	bool stream_enabled = true; // Whether or not to display streaming window for testing purposes
 								 // If I ever implement multithreading, then I might be able to turn this on permanently
 	bool stream_only = false; // Enable just for camera testing without any motion
-	bool console_enabled = true; // Enable to allow access to the console to send G-code manually to the Arduino
+	bool console_enabled = false; // Enable to allow access to the console to send G-code manually to the Arduino
 								  // Streaming will be gimped if it's enabled at the same time (until I enable multithreading)
 
 	GrblStatus grbl_status;
@@ -310,8 +310,8 @@ int main(array<System::String ^> ^args)
 				dy = last_dy = object_coord.y - origin.y; // Offset of the object centroid in y
 				dr = last_dr = sqrt(dx*dx + dy*dy);
 
-				fly_position.x = grbl_status.x*mm_per_cts_x + dx/25;
-				fly_position.y = grbl_status.y*mm_per_cts_y + dy/25;
+				fly_position.x = grbl_status.x + dx/25;
+				fly_position.y = grbl_status.y + dy/25;
 				is_following = true;
 			}
 			else
@@ -370,8 +370,6 @@ int main(array<System::String ^> ^args)
 					arduino_tx(arduino, gcode_command);
 					moves_in_queue++;
 					command_time_file << GetCounter() - command_timer << "\n";
-					//Console::WriteLine(GetCounter() - command_timer); 
-					//Console::WriteLine(moves_in_queue);
 					ready_to_send_next_move_cmd = false;
 				}
 			}
