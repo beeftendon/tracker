@@ -99,7 +99,9 @@ int main(array<System::String ^> ^args)
 	double data_input_timer = GetCounter(); // Log how long it takes to grab a camera frame and the motor status
 	double misc_timer = GetCounter();
 	double query_timer = GetCounter();
-	double arduino_command_timer = GetCounter(); // Timer used to send commands to 
+	double arduino_command_timer = GetCounter(); // Timer used to send commands to
+	double frame_cap_delay = GetCounter();
+	double query_delay = GetCounter();
 	
 	int moves_in_queue = 0;
 
@@ -115,8 +117,8 @@ int main(array<System::String ^> ^args)
 	arduino->Open();
 
 	// Motor parameters
-	double mm_per_cts_x = 1.65;
-	double mm_per_cts_y = 40;
+	double steps_per_mm_x = 40;
+	double steps_per_mm_y = 40;
 	
 
 	// Define some OpenCV primary colors for convenience
@@ -134,14 +136,14 @@ int main(array<System::String ^> ^args)
 	Mat processed_frame; // This is the one that will be processed and used to find contours on
 	
 	VideoCapture vid_cap(CV_CAP_ANY); // This is sufficient for a single camera setup. Otherwise, it will need to be more specific.
-	vid_cap.set(CV_CAP_PROP_FPS, 240); // Need to set the exposure time to appropriate value in Pylon Viewer as well
+	vid_cap.set(CV_CAP_PROP_FPS, 480); // Need to set the exposure time to appropriate value in Pylon Viewer as well
 	vid_cap.set(CV_CAP_PROP_FRAME_HEIGHT, 200); // 200x200 window
-	vid_cap.set(CV_CAP_PROP_FRAME_WIDTH, 200); 
+	vid_cap.set(CV_CAP_PROP_FRAME_WIDTH, 200);
 
 	initialize_grbl(arduino);
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
-	bool stream_enabled = true; // Whether or not to display streaming window for testing purposes
+	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
 								 // If I ever implement multithreading, then I might be able to turn this on permanently
 	bool stream_only = false; // Enable just for camera testing without any motion
 	bool console_enabled = false; // Enable to allow access to the console to send G-code manually to the Arduino
@@ -183,37 +185,30 @@ int main(array<System::String ^> ^args)
 		}
 		else
 		{
-			while (GetCounter() - query_timer < 8.0)
+			// Let the full period (approx) finish to allow messages and stuff to go through
+			while (GetCounter() - loop_timer < 8.0)
 			{
+				// Also use this time to clear the serial buffer
+				double serial_timeout = 8.0 - (GetCounter() - loop_timer); // Set timeout to remainder of the wait period
+				try
+				{
+					SysString^ message = arduino_rx(arduino, serial_timeout);
+				}
+				catch (TimeoutException^)
+				{
+					// Just let it slide and let the loop play out
+					continue;
+				}
+			}
 
-			}
-			loop_time_file << GetCounter() - query_timer << "\n";
-			query_timer = GetCounter(); // make sure there is a full period between loops
-			if (first_query)
-			{
-				data_input_timer = GetCounter();
-				arduino_tx(arduino, "?"); // Query Grbl status
-				data_input_time_file << GetCounter() - data_input_timer << ", ";
-			}
-			first_query = false;
+			loop_time_file << GetCounter() - loop_timer << "\n";
+			loop_timer = GetCounter(); // make sure there is a full period between loops
 
 			data_input_timer = GetCounter();
-			vid_cap >> capped_frame;
-
-			if (capped_frame.empty())
-			{
-				// Frame was dropped
-				// TODO Make this more elegant in the final implementation. It will need to allow for the occasional dropped frame without a meltdown
-
-				fprintf(stderr, "ERROR: Frame is null\n");
-				getchar();
-				continue;
-			}
+			arduino_tx(arduino, "?"); // Query Grbl status
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
 
-			if (video_counter == 0)
-				video.write(capped_frame);
-			video_counter = (video_counter + 1) % 10;
+			data_input_timer = GetCounter();
 
 			SysString^ query_status_response;
 			int grbl_state = 0;
@@ -248,13 +243,37 @@ int main(array<System::String ^> ^args)
 			}
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
 
+			// The camera has a frame buffer, which means the capped frame may not be as up-to-date as we need
+			// A frame that's been sitting in the buffer can be detected by virtue of the delay it takes to capture the frame
+			// If the frame is captured too quickly, then capture another frame. Repeat until it takes more than 1ms
+			do
+			{
+				frame_cap_delay = GetCounter();
+				vid_cap >> capped_frame;
+			} while (GetCounter() - frame_cap_delay < 0.5);
+
+			if (capped_frame.empty())
+			{
+				// Frame was dropped
+				// TODO Make this more elegant in the final implementation. It will need to allow for the occasional dropped frame without a meltdown
+
+				fprintf(stderr, "ERROR: Frame is null\n");
+				getchar();
+				continue;
+			}
+			data_input_time_file << GetCounter() - data_input_timer << ", ";
+
+			if (video_counter == 0)
+				video.write(capped_frame);
+			video_counter = (video_counter + 1) % 10;
+
 			data_input_timer = GetCounter();
 			// Convert to monochrome
 			cvtColor(capped_frame, processed_frame, CV_BGR2GRAY);
 			// Blur to reduce noise
 			blur(processed_frame, processed_frame, Size(10, 10));
 			// Threshold to convert to binary image for easier contouring
-			int binary_threshold = 48; // out of 255
+			int binary_threshold = 100; // out of 255
 			threshold(processed_frame, processed_frame, binary_threshold, 255, CV_THRESH_BINARY);
 
 			// Detect edges (I don't think the thresholds are that important here since the image has already been binarized. However, they are mandatory for the function call)
@@ -285,7 +304,7 @@ int main(array<System::String ^> ^args)
 			}
 
 			// This will be the drawing displayed on the stream if it's enabled
-			Mat displayed_drawing = capped_frame; // Initialize with just the camera image. Outline and centroid will be added later
+			Mat displayed_drawing = processed_frame; // Initialize with just the camera image. Outline and centroid will be added later
 			// Change the frame this is assigned to to change what you want to look at
 
 			Point2f origin = Point2f(100, 100); // Center of the frame. (0, 0) is usually the upper left corner. Define this because offset will be relative to "origin"
@@ -306,11 +325,11 @@ int main(array<System::String ^> ^args)
 				circle(displayed_drawing, object_coord, moment_center_radius, color_green, CV_FILLED); // add to drawing
 
 
-				dx = last_dx = object_coord.x - origin.x; // Offset of the object centroid in x
+				dx = last_dx = object_coord.x - origin.x; // Offset of the object centroid in x, the direction is negative
 				dy = last_dy = object_coord.y - origin.y; // Offset of the object centroid in y
 				dr = last_dr = sqrt(dx*dx + dy*dy);
 
-				fly_position.x = grbl_status.x + dx/25;
+				fly_position.x = grbl_status.x - dx/25;
 				fly_position.y = grbl_status.y + dy/25;
 				is_following = true;
 			}
@@ -327,11 +346,17 @@ int main(array<System::String ^> ^args)
 			}
 			data_input_time_file << GetCounter() - data_input_timer << "\n";
 
+			if (stream_enabled || stream_only)
+			{
+				imshow("Frame", displayed_drawing);
+				char key_press = waitKey(1);
+				if (key_press == 27) return 0;
+			}
+
 			SysString^ gcode_command_type = "1";
 
 			if (!stream_only && !console_enabled) // Don't move stuff if I just want to look at the camera or send manual commands
 			{
-				// Motion stuff based on the object's coordinate, also for this test I'm doing right now it only has X axis enabled
 				// TODO Have the move command continue without an available contour just in the direction it was previously traveling
 
 				// This is my janky control system that will definitely need to be improved
@@ -360,10 +385,10 @@ int main(array<System::String ^> ^args)
 				else
 					p_gain_y = 0.0005;
 
-				double x_command = -fly_position.x;
+				double x_command = fly_position.x;
 				double y_command = fly_position.y;
 
-				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 1000 / 1 && dr > 0)
+				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 200 && dr > 5)
 				{
 					SysString^ gcode_command = "G" + gcode_command_type + " X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
 					command_timer = GetCounter();
@@ -372,13 +397,6 @@ int main(array<System::String ^> ^args)
 					command_time_file << GetCounter() - command_timer << "\n";
 					ready_to_send_next_move_cmd = false;
 				}
-			}
-
-			if (stream_enabled || stream_only)
-			{
-				imshow("Frame", displayed_drawing);
-				char key_press = waitKey(1);
-				if (key_press == 27) return 0;
 			}
 
 			if (console_enabled)
@@ -402,13 +420,6 @@ int main(array<System::String ^> ^args)
 
 				}
 			}
-
-			//loop_time_file << GetCounter() - loop_timer << "\n";
-			//loop_timer = GetCounter();
-
-			data_input_timer = GetCounter();
-			arduino_tx(arduino, "?"); // Query Grbl status
-			data_input_time_file << GetCounter() - data_input_timer << ", ";
 
 			loop_counter++;
 		}
