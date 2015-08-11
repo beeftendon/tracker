@@ -63,7 +63,7 @@ void clear_serial_buffer(SerialPort^ arduino, int timeout = 1)
 	return;
 }
 
-void cameraDisplayLoop(void * param)
+void cameraDisplayLoop(void * param) // I was going to put this 
 {
 	Mat * frame = (Mat *) param;
 	namedWindow("Camera Display");
@@ -193,6 +193,8 @@ int main(array<System::String ^> ^args)
 				try
 				{
 					SysString^ message = arduino_rx(arduino, serial_timeout);
+					if (message->Equals("ok\r"))
+						ready_to_send_next_move_cmd = true;
 				}
 				catch (TimeoutException^)
 				{
@@ -207,8 +209,6 @@ int main(array<System::String ^> ^args)
 			data_input_timer = GetCounter();
 			arduino_tx(arduino, "?"); // Query Grbl status
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
-
-			data_input_timer = GetCounter();
 
 			SysString^ query_status_response;
 			int grbl_state = 0;
