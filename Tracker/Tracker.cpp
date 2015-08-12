@@ -43,45 +43,15 @@ double GetCounter()
 	return double(li.QuadPart - CounterStart) / PCFreq;
 }
 
-void clear_serial_buffer(SerialPort^ arduino, int timeout = 1)
-{
-	arduino->ReadTimeout = timeout;
-	SysString^ response;
-	try
-	{
-		do
-		{
-			response = arduino->ReadLine();
-		} while (!response->Equals("ok\r") && !response->Contains("error:"));
-	}
-	catch (TimeoutException^)
-	{
-		arduino->ReadTimeout = SerialPort::InfiniteTimeout;
-		return;
-	}
-	arduino->ReadTimeout = SerialPort::InfiniteTimeout;
-	return;
-}
-
-void cameraDisplayLoop(void * param) // I was going to put this 
-{
-	Mat * frame = (Mat *) param;
-	namedWindow("Camera Display");
-
-	while (1){
-		imshow("Camera Display", *frame);
-		waitKey(1);
-	}
-}
-
 int main(array<System::String ^> ^args)
 {
 	// Set up files for testing and logging
 	ofstream loop_time_file;
 	loop_time_file.open("loop_time.txt");
+	loop_time_file << "\n";
 	ofstream data_input_time_file;
 	data_input_time_file.open("data_input_time.txt");
-	data_input_time_file << "query command time, frame cap time, query respond time, image processing time\n";
+	data_input_time_file << "query send time, query receive time, frame cap time, image processing time, move command send time";
 	ofstream command_time_file;
 	command_time_file.open("command_time.txt");
 	ofstream command_file;
@@ -186,6 +156,7 @@ int main(array<System::String ^> ^args)
 		else
 		{
 			// Let the full period (approx) finish to allow messages and stuff to go through
+			misc_timer = GetCounter();
 			while (GetCounter() - loop_timer < 8.0)
 			{
 				// Also use this time to clear the serial buffer
@@ -203,11 +174,18 @@ int main(array<System::String ^> ^args)
 				}
 			}
 
-			loop_time_file << GetCounter() - loop_timer << "\n";
+			if (loop_counter > 0)
+			{
+				loop_time_file << loop_counter - 1 << ", " << GetCounter() - loop_timer << "\n";
+				data_input_time_file << GetCounter() - data_input_timer;
+				misc_time_file << loop_counter - 1 << ", " << GetCounter() - misc_timer << "\n";
+			}
+
 			loop_timer = GetCounter(); // make sure there is a full period between loops
 
 			data_input_timer = GetCounter();
 			arduino_tx(arduino, "?"); // Query Grbl status
+			data_input_time_file << "\n" << loop_counter << ", ";
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
 
 			SysString^ query_status_response;
@@ -243,6 +221,7 @@ int main(array<System::String ^> ^args)
 			}
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
 
+			data_input_timer = GetCounter();
 			// The camera has a frame buffer, which means the capped frame may not be as up-to-date as we need
 			// A frame that's been sitting in the buffer can be detected by virtue of the delay it takes to capture the frame
 			// If the frame is captured too quickly, then capture another frame. Repeat until it takes more than 1ms
@@ -250,7 +229,7 @@ int main(array<System::String ^> ^args)
 			{
 				frame_cap_delay = GetCounter();
 				vid_cap >> capped_frame;
-			} while (GetCounter() - frame_cap_delay < 0.5);
+			} while (GetCounter() - frame_cap_delay < 2.0);
 
 			if (capped_frame.empty())
 			{
@@ -265,7 +244,7 @@ int main(array<System::String ^> ^args)
 
 			if (video_counter == 0)
 				video.write(capped_frame);
-			video_counter = (video_counter + 1) % 10;
+			video_counter = (video_counter + 1) % 5;
 
 			data_input_timer = GetCounter();
 			// Convert to monochrome
@@ -280,9 +259,7 @@ int main(array<System::String ^> ^args)
 			Mat processed_frame_edges;
 			int lower_canny_threshold = 10;
 			int upper_canny_threshold = lower_canny_threshold * 10;
-			misc_timer = GetCounter();
 			Canny(processed_frame, processed_frame_edges, lower_canny_threshold, upper_canny_threshold);
-			misc_time_file << GetCounter() - misc_timer << "\n";
 
 			// Detect contours
 			contours.clear(); // Clear upon each new iteration of the loop
@@ -344,7 +321,8 @@ int main(array<System::String ^> ^args)
 					is_following = false; //Just do this once because if it can't find the object anymore then I don't want the thing crashing into the hard stop
 				}
 			}
-			data_input_time_file << GetCounter() - data_input_timer << "\n";
+			data_input_time_file << GetCounter() - data_input_timer << ", ";
+			data_input_timer = GetCounter();
 
 			if (stream_enabled || stream_only)
 			{
@@ -388,7 +366,8 @@ int main(array<System::String ^> ^args)
 				double x_command = fly_position.x;
 				double y_command = fly_position.y;
 
-				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 200 && dr > 5)
+				/*
+				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 500 && dr > 5)
 				{
 					SysString^ gcode_command = "G" + gcode_command_type + " X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
 					command_timer = GetCounter();
@@ -396,7 +375,10 @@ int main(array<System::String ^> ^args)
 					moves_in_queue++;
 					command_time_file << GetCounter() - command_timer << "\n";
 					ready_to_send_next_move_cmd = false;
+					
+					data_input_time_file << GetCounter() - data_input_timer;
 				}
+				*/
 			}
 
 			if (console_enabled)
