@@ -90,7 +90,6 @@ int main(array<System::String ^> ^args)
 	double steps_per_mm_x = 40;
 	double steps_per_mm_y = 40;
 	
-
 	// Define some OpenCV primary colors for convenience
 	Scalar color_white = Scalar(255, 255, 255);
 	Scalar color_black = Scalar(0, 0, 0);
@@ -336,32 +335,6 @@ int main(array<System::String ^> ^args)
 			if (!stream_only && !console_enabled) // Don't move stuff if I just want to look at the camera or send manual commands
 			{
 				// TODO Have the move command continue without an available contour just in the direction it was previously traveling
-
-				// This is my janky control system that will definitely need to be improved
-
-				double p_gain_x; // Proportional gain for x-axis
-				double p_gain_y; // Proportional gain for y-axis
-				if (abs(dx) > 80)
-					p_gain_x = 0.008;
-				else if (abs(dx) > 50)
-					p_gain_x = 0.006;
-				else if (abs(dx) > 15)
-					p_gain_x = 0.003;
-				else if (abs(dx) > 5)
-					p_gain_x = 0.001;
-				else
-					p_gain_x = 0.0005;
-
-				if (abs(dy) > 80)
-					p_gain_y = 0.008;
-				else if (abs(dy) > 50)
-					p_gain_y = 0.006;
-				else if (abs(dy) > 15)
-					p_gain_y = 0.003;
-				else if (abs(dy) > 5)
-					p_gain_y = 0.001;
-				else
-					p_gain_y = 0.0005;
 
 				double x_command = fly_position.x;
 				double y_command = fly_position.y;
