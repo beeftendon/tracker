@@ -7,3 +7,9 @@ struct FlyPosition
 
 // This must be declared as a global variable to work with the GLUT rendering function
 extern FlyPosition fly_position;
+
+/*
+All the stimulus function headers go here
+*/
+
+void drawCylinderBarsES();

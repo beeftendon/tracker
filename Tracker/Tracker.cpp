@@ -4,10 +4,12 @@
 #include "arduino.h"
 #include "stimulus.h"
 #include "glew.h"
-#include "freeglut.h"
+//#include "freeglut.h"
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
+
+#include "timer.h"
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -21,28 +23,11 @@ using namespace std;
 using namespace cv;
 using SysString = System::String;
 
+FlyPosition fly_position;
 
-double PCFreq = 0.0;
-__int64 CounterStart = 0;
-
-void StartCounter()
-{
-	LARGE_INTEGER li;
-	if (!QueryPerformanceFrequency(&li))
-		cout << "QueryPerformanceFrequency failed!\n";
-
-	PCFreq = double(li.QuadPart) / 1000.0;
-
-	QueryPerformanceCounter(&li);
-	CounterStart = li.QuadPart;
-}
-double GetCounter()
-{
-	LARGE_INTEGER li;
-	QueryPerformanceCounter(&li);
-	return double(li.QuadPart - CounterStart) / PCFreq;
-}
-
+// This needs to be cleaned up but I gotta get this shit working
+// This definition should probably go somewhere else. Also, using "ready_to_send_next_move_cmd" flag here redundantly with the same flag in the main() function
+//   is probably dumb, but I don't know how to make it less dumb right now.
 public ref class GrblQuery
 {
 public:
@@ -63,7 +48,7 @@ public:
 		SysString^ query_status_response;
 		do
 		{
-			query_status_response = arduino_rx(arduino);
+			query_status_response = arduino_rx(arduino, 1000);
 			if (query_status_response->Equals("ok\r"))
 			{
 				ready_to_send_next_move_cmd = true;
@@ -74,16 +59,6 @@ public:
 			}
 		} while (query_status_response->Equals("ok\r"));
 		completed = true;
-	}
-
-	GrblStatus GetGrblStatus()
-	{
-		return grbl_status;
-	}
-
-	bool IsReadyToSendNextMoveCmd()
-	{
-		return ready_to_send_next_move_cmd;
 	}
 };
 
@@ -107,17 +82,17 @@ int main(array<System::String ^> ^args)
 	VideoWriter video("out.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(200, 200), true);
 
 
-	StartCounter(); // For getting timing data
+	start_counter(); // For getting timing data
 	// Timers for stuff that might need them. Can add more later.
-	double move_init_timer = GetCounter();
-	double loop_timer = GetCounter(); // This is the main timer to monitor the loop
-	double command_timer = GetCounter(); // Log how long it takes to write a move command into the buffer
-	double data_input_timer = GetCounter(); // Log how long it takes to grab a camera frame and the motor status
-	double misc_timer = GetCounter();
-	double query_timer = GetCounter();
-	double arduino_command_timer = GetCounter(); // Timer used to send commands to
-	double frame_cap_delay = GetCounter();
-	double query_delay = GetCounter();
+	double move_init_timer = get_counter();
+	double loop_timer = get_counter(); // This is the main timer to monitor the loop
+	double command_timer = get_counter(); // Log how long it takes to write a move command into the buffer
+	double data_input_timer = get_counter(); // Log how long it takes to grab a camera frame and the motor status
+	double misc_timer = get_counter();
+	double query_timer = get_counter();
+	double arduino_command_timer = get_counter(); // Timer used to send commands to
+	double frame_cap_delay = get_counter();
+	double query_delay = get_counter();
 	
 	int moves_in_queue = 0;
 
@@ -203,12 +178,12 @@ int main(array<System::String ^> ^args)
 		else
 		{
 			// Let the full period (approx) finish to allow messages and stuff to go through
-			misc_timer = GetCounter();
-			while (GetCounter() - loop_timer < 8.0)
+			misc_timer = get_counter();
+			while (get_counter() - loop_timer < 0)
 			{
 				
 				// Also use this time to clear the serial buffer
-				double serial_timeout = floor(8.0 - (GetCounter() - loop_timer)); // Set timeout to remainder of the wait period
+				double serial_timeout = floor(4.0 - (get_counter() - loop_timer)); // Set timeout to remainder of the wait period
 				try
 				{
 					SysString^ message = arduino_rx(arduino, serial_timeout);
@@ -225,27 +200,30 @@ int main(array<System::String ^> ^args)
 
 			if (loop_counter > 0)
 			{
-				loop_time_file << loop_counter - 1 << ", " << GetCounter() - loop_timer << "\n";
-				data_input_time_file << GetCounter() - data_input_timer;
-				misc_time_file << loop_counter - 1 << ", " << GetCounter() - misc_timer << "\n";
+				loop_time_file << loop_counter - 1 << ", " << get_counter() - loop_timer << "\n";
+				data_input_time_file << get_counter() - data_input_timer;
+				misc_time_file << loop_counter - 1 << ", " << get_counter() - misc_timer << "\n";
 			}
 
-			loop_timer = GetCounter(); // make sure there is a full period between loops
+			loop_timer = get_counter(); // make sure there is a full period between loops
 			data_input_time_file << "\n" << loop_counter << ", ";
 
-			data_input_timer = GetCounter();
+			data_input_timer = get_counter();
+
+			// Start new thread for command query
 			Thread^ grbl_query_thread = gcnew Thread(gcnew ThreadStart(grbl_query, &GrblQuery::QueryGrblStatus));
 			grbl_query_thread->Name = "grbl_query";
 			grbl_query_thread->Start();
+
 			/*
 
 			arduino_tx(arduino, "?"); // Query Grbl status
-			data_input_time_file << GetCounter() - data_input_timer << ", ";
+			data_input_time_file << get_counter() - data_input_timer << ", ";
 
 			SysString^ query_status_response;
 			int grbl_state = 0;
 
-			data_input_timer = GetCounter();
+			data_input_timer = get_counter();
 			do
 			{
 				query_status_response = arduino_rx(arduino);
@@ -275,18 +253,18 @@ int main(array<System::String ^> ^args)
 			}
 			*/
 			
-			position_file << GetCounter() << ", " << grbl_status.state << ", " << grbl_status.x << ", " << grbl_status.y << "\n";
-			data_input_time_file << GetCounter() - data_input_timer << ", ";
+			position_file << get_counter() << ", " << grbl_status.state << ", " << grbl_status.x << ", " << grbl_status.y << "\n";
+			data_input_time_file << get_counter() - data_input_timer << ", ";
 
-			data_input_timer = GetCounter();
+			data_input_timer = get_counter();
 			// The camera has a frame buffer, which means the capped frame may not be as up-to-date as we need
 			// A frame that's been sitting in the buffer can be detected by virtue of the delay it takes to capture the frame
 			// If the frame is captured too quickly, then capture another frame. Repeat until it takes more than 1ms
 			do
 			{
-				frame_cap_delay = GetCounter();
+				frame_cap_delay = get_counter();
 				vid_cap >> capped_frame;
-			} while (GetCounter() - frame_cap_delay < 2);
+			} while (get_counter() - frame_cap_delay < 2);
 
 			if (capped_frame.empty())
 			{
@@ -301,10 +279,10 @@ int main(array<System::String ^> ^args)
 			grbl_status = grbl_query->grbl_status;
 			if (!ready_to_send_next_move_cmd)
 				ready_to_send_next_move_cmd = grbl_query->ready_to_send_next_move_cmd;
-			data_input_time_file << GetCounter() - data_input_timer << ", ";
+			data_input_time_file << get_counter() - data_input_timer << ", ";
 			
 
-			data_input_timer = GetCounter();
+			data_input_timer = get_counter();
 			// Convert to monochrome
 			cvtColor(capped_frame, processed_frame, CV_BGR2GRAY);
 			// Blur to reduce noise
@@ -379,8 +357,8 @@ int main(array<System::String ^> ^args)
 					is_following = false; //Just do this once because if it can't find the object anymore then I don't want the thing crashing into the hard stop
 				}
 			}
-			data_input_time_file << GetCounter() - data_input_timer << ", ";
-			data_input_timer = GetCounter();
+			data_input_time_file << get_counter() - data_input_timer << ", ";
+			data_input_timer = get_counter();
 
 			if (stream_enabled || stream_only)
 			{
@@ -399,16 +377,16 @@ int main(array<System::String ^> ^args)
 				double y_command = fly_position.y;
 
 				
-				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 100 && dr > 5)
+				if (ready_to_send_next_move_cmd && get_counter() - command_timer > 100 && dr > 5)
 				{
 					SysString^ gcode_command = "G" + gcode_command_type + " X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
-					command_timer = GetCounter();
+					command_timer = get_counter();
 					arduino_tx(arduino, gcode_command);
 					moves_in_queue++;
-					command_time_file << GetCounter() - command_timer << "\n";
+					command_time_file << get_counter() - command_timer << "\n";
 					ready_to_send_next_move_cmd = false;
 					
-					data_input_time_file << GetCounter() - data_input_timer;
+					data_input_time_file << get_counter() - data_input_timer;
 				}
 
 				data_input_time_file << ", ";
