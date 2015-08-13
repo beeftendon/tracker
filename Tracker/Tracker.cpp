@@ -4,7 +4,7 @@
 #include "arduino.h"
 #include "stimulus.h"
 #include "glew.h"
-//#include "freeglut.h"
+#include "freeglut.h"
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
@@ -62,7 +62,7 @@ public:
 	}
 };
 
-int main(array<System::String ^> ^args)
+int main()//(array<System::String ^> ^args)
 {
 	// Set up files for testing and logging
 	ofstream loop_time_file;
@@ -92,7 +92,7 @@ int main(array<System::String ^> ^args)
 	double query_timer = get_counter();
 	double arduino_command_timer = get_counter(); // Timer used to send commands to
 	double frame_cap_delay = get_counter();
-	double query_delay = get_counter();
+	double screen_update_timer = get_counter();
 	
 	int moves_in_queue = 0;
 
@@ -131,6 +131,18 @@ int main(array<System::String ^> ^args)
 	vid_cap.set(CV_CAP_PROP_FRAME_WIDTH, 200);
 
 	initialize_grbl(arduino);
+
+	// This is bullshit I don't know why it works
+	char *myargv[1];
+	int myargc = 1;
+	myargv[0] = _strdup("Myappname");
+	glutInit(&myargc, myargv);
+	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
+	glutInitWindowPosition(100, 100);
+	glutInitWindowSize(640, 360);
+	glutCreateWindow("My animation");
+	glutDisplayFunc(draw_cylinder_bars);
+	glutReshapeFunc(change_size);
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
 	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
@@ -342,8 +354,16 @@ int main(array<System::String ^> ^args)
 				dy = last_dy = object_coord.y - origin.y; // Offset of the object centroid in y
 				dr = last_dr = sqrt(dx*dx + dy*dy);
 
+				// The 25 is a pixel-to-mm scaling factor (needs to be updated with final mount)
 				fly_position.x = grbl_status.x - dx/25;
 				fly_position.y = grbl_status.y + dy/25;
+
+				if (get_counter() - screen_update_timer >= 8)
+				{
+					glutMainLoopEvent();
+					screen_update_timer = get_counter();
+				}
+
 				is_following = true;
 			}
 			else

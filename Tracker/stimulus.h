@@ -12,4 +12,5 @@ extern FlyPosition fly_position;
 All the stimulus function headers go here
 */
 
-void drawCylinderBarsES();
+void draw_cylinder_bars();
+void change_size(int w, int h);
