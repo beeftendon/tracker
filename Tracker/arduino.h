@@ -1,5 +1,5 @@
 // Stuff for storing grbl status upon query command ("?")
-struct GrblStatus
+public value struct GrblStatus
 {
 	int state=-1; // See Grbl states for enumerated values
 	

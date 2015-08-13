@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
-#include <process.h>
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -21,6 +20,7 @@ using namespace System::Threading;
 using namespace std;
 using namespace cv;
 using SysString = System::String;
+
 
 double PCFreq = 0.0;
 __int64 CounterStart = 0;
@@ -43,6 +43,50 @@ double GetCounter()
 	return double(li.QuadPart - CounterStart) / PCFreq;
 }
 
+public ref class GrblQuery
+{
+public:
+	GrblStatus grbl_status;
+	SerialPort^ arduino;
+	bool ready_to_send_next_move_cmd;
+	bool completed = false;
+
+	GrblQuery(SerialPort^ arduino_port)
+	{
+		arduino = arduino_port;
+	}
+
+	void QueryGrblStatus()
+	{
+		arduino_tx(arduino, "?"); // Query Grbl status
+
+		SysString^ query_status_response;
+		do
+		{
+			query_status_response = arduino_rx(arduino);
+			if (query_status_response->Equals("ok\r"))
+			{
+				ready_to_send_next_move_cmd = true;
+			}
+			else
+			{
+				grbl_status = parse_grbl_status(query_status_response);
+			}
+		} while (query_status_response->Equals("ok\r"));
+		completed = true;
+	}
+
+	GrblStatus GetGrblStatus()
+	{
+		return grbl_status;
+	}
+
+	bool IsReadyToSendNextMoveCmd()
+	{
+		return ready_to_send_next_move_cmd;
+	}
+};
+
 int main(array<System::String ^> ^args)
 {
 	// Set up files for testing and logging
@@ -58,6 +102,8 @@ int main(array<System::String ^> ^args)
 	command_file.open("commands.txt");
 	ofstream misc_time_file; // I just use this for logging timers that I might want to move around
 	misc_time_file.open("misc_times.txt");
+	ofstream position_file;
+	position_file.open("positions.txt");
 	VideoWriter video("out.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(200, 200), true);
 
 
@@ -119,6 +165,8 @@ int main(array<System::String ^> ^args)
 								  // Streaming will be gimped if it's enabled at the same time (until I enable multithreading)
 
 	GrblStatus grbl_status;
+	GrblQuery^ grbl_query = gcnew GrblQuery(arduino);
+
 
 	bool is_following = false; // for use when the contour leaves the frame
 	bool ready_to_send_next_move_cmd = true;
@@ -158,8 +206,9 @@ int main(array<System::String ^> ^args)
 			misc_timer = GetCounter();
 			while (GetCounter() - loop_timer < 8.0)
 			{
+				
 				// Also use this time to clear the serial buffer
-				double serial_timeout = 8.0 - (GetCounter() - loop_timer); // Set timeout to remainder of the wait period
+				double serial_timeout = floor(8.0 - (GetCounter() - loop_timer)); // Set timeout to remainder of the wait period
 				try
 				{
 					SysString^ message = arduino_rx(arduino, serial_timeout);
@@ -171,6 +220,7 @@ int main(array<System::String ^> ^args)
 					// Just let it slide and let the loop play out
 					continue;
 				}
+				
 			}
 
 			if (loop_counter > 0)
@@ -181,10 +231,15 @@ int main(array<System::String ^> ^args)
 			}
 
 			loop_timer = GetCounter(); // make sure there is a full period between loops
+			data_input_time_file << "\n" << loop_counter << ", ";
 
 			data_input_timer = GetCounter();
+			Thread^ grbl_query_thread = gcnew Thread(gcnew ThreadStart(grbl_query, &GrblQuery::QueryGrblStatus));
+			grbl_query_thread->Name = "grbl_query";
+			grbl_query_thread->Start();
+			/*
+
 			arduino_tx(arduino, "?"); // Query Grbl status
-			data_input_time_file << "\n" << loop_counter << ", ";
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
 
 			SysString^ query_status_response;
@@ -218,6 +273,9 @@ int main(array<System::String ^> ^args)
 				getchar();
 				goto exit_main_loop;
 			}
+			*/
+			
+			position_file << GetCounter() << ", " << grbl_status.state << ", " << grbl_status.x << ", " << grbl_status.y << "\n";
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
 
 			data_input_timer = GetCounter();
@@ -228,7 +286,7 @@ int main(array<System::String ^> ^args)
 			{
 				frame_cap_delay = GetCounter();
 				vid_cap >> capped_frame;
-			} while (GetCounter() - frame_cap_delay < 2.0);
+			} while (GetCounter() - frame_cap_delay < 2);
 
 			if (capped_frame.empty())
 			{
@@ -239,11 +297,12 @@ int main(array<System::String ^> ^args)
 				getchar();
 				continue;
 			}
+			grbl_query_thread->Join();
+			grbl_status = grbl_query->grbl_status;
+			if (!ready_to_send_next_move_cmd)
+				ready_to_send_next_move_cmd = grbl_query->ready_to_send_next_move_cmd;
 			data_input_time_file << GetCounter() - data_input_timer << ", ";
-
-			if (video_counter == 0)
-				video.write(capped_frame);
-			video_counter = (video_counter + 1) % 5;
+			
 
 			data_input_timer = GetCounter();
 			// Convert to monochrome
@@ -339,8 +398,8 @@ int main(array<System::String ^> ^args)
 				double x_command = fly_position.x;
 				double y_command = fly_position.y;
 
-				/*
-				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 500 && dr > 5)
+				
+				if (ready_to_send_next_move_cmd && GetCounter() - command_timer > 100 && dr > 5)
 				{
 					SysString^ gcode_command = "G" + gcode_command_type + " X" + Convert::ToString(x_command) + " Y" + Convert::ToString(y_command);
 					command_timer = GetCounter();
@@ -351,7 +410,8 @@ int main(array<System::String ^> ^args)
 					
 					data_input_time_file << GetCounter() - data_input_timer;
 				}
-				*/
+
+				data_input_time_file << ", ";
 			}
 
 			if (console_enabled)

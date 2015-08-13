@@ -58,7 +58,7 @@ void initialize_grbl(System::IO::Ports::SerialPort^ arduino_port)
 	serial_response = arduino_tx_rx(arduino_port, "$121=500"); // Y accel (mm/s^2)
 	System::Console::WriteLine("$121=500, " + serial_response);
 
-	serial_response = arduino_tx_rx(arduino_port, "F100000"); // Linear move feedrate (mm/min)
+	serial_response = arduino_tx_rx(arduino_port, "F10000"); // Linear move feedrate (mm/min)
 	System::Console::WriteLine("F5000, " + serial_response);
 
 	serial_response = arduino_tx_rx(arduino_port, "G21"); // Setting for units (G20 = in, G21 = mm)
