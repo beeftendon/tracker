@@ -36,20 +36,27 @@ void draw_cylinder_bars()
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	gluLookAt(fly_position.x, 0, fly_position.y, 0, 0, 1, 0, 1, 0);
+	double aspect_ratio = 640 / 360;
+	double frustum_width = 200;
 	//float startpos = Stimulus.spacing; // degrees, where first bar is drawn
 	double startpos = 180;
 	double startpos_i;
 	double width = 1; // degrees
 	double direction = -1; // Sign
-	double r = 1000; // arbitrary radius, doesn't matter for now since everything else is in degrees
+	double r = 100; // arbitrary radius, doesn't matter for now since everything else is in degrees
 	double added; // 090302, added this to get rid of stimrot.mean rotation, not useful for me here...
+
+	glutSetWindow(window1);
+	
+	gluLookAt(fly_position.x, 0, fly_position.y, 0, 0, -9999999999, 0, 1, 0);
+	glFrustum(-frustum_width / 2, frustum_width / 2, -(frustum_width*aspect_ratio) / 2, (frustum_width*aspect_ratio) / 2, 100, 10000.0);
 
 	startpos_i = 0.01 * (time_in_ms)* direction;
 
 	double height = 10 * r; // arbitrary number just to cover the screen
 
-	int spacing_factor = 5;
+	int spacing_factor = 2;
+	
 	for (int i = 0; i < 360.1 / (abs(width)*spacing_factor); i++)
 	{
 
@@ -73,8 +80,29 @@ void draw_cylinder_bars()
 
 		//TrackStim::drawWedge(i*(2 * width) - width / 2 + added, width);
 	};
-	glutPostRedisplay();
-	glutSwapBuffers();
 
+	//glutPostRedisplay();
+	//glutSwapBuffers();
+	
+	glutSetWindow(window2);
+	
+	//gluLookAt(0, 0, 200, 0, 0, -9999999999, 0, 1, 0);
+	//glFrustum(-frustum_width / 2, frustum_width / 2, -(frustum_width*aspect_ratio) / 2, (frustum_width*aspect_ratio) / 2, 100, 10000.0);
+	/*
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 1);
+	glBegin(GL_QUADS);
+	// Draw the vertices in CCW order
+	glVertex3f(-50, 50, -100); // top left
+	glVertex3f(-50, -50, -100); // bottom left
+	glVertex3f(50, -50, -50); // bottom right
+	glVertex3f(50, 50, -10); // top right
+	glEnd();
+	*/
+	glutSetWindow(window1);
+	glutPostRedisplay();
+
+	glutSwapBuffers();
+	
 	return;
 };

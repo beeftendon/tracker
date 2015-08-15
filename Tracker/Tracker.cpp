@@ -23,7 +23,9 @@ using namespace std;
 using namespace cv;
 using SysString = System::String;
 
+// Global variables related to GLUT because GLUT is dumb and requires use of global variables like this
 FlyPosition fly_position;
+int windows[4], window1, window2, window3, window4;
 
 // This needs to be cleaned up but I gotta get this shit working
 // This definition should probably go somewhere else. Also, using "ready_to_send_next_move_cmd" flag here redundantly with the same flag in the main() function
@@ -140,12 +142,15 @@ int main()//(array<System::String ^> ^args)
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowPosition(100, 100);
 	glutInitWindowSize(640, 360);
-	glutCreateWindow("My animation");
+	window1 = glutCreateWindow("Window 1");
+	glutDisplayFunc(draw_cylinder_bars);
+	glutReshapeFunc(change_size);
+	window2 = glutCreateWindow("Window 2");
 	glutDisplayFunc(draw_cylinder_bars);
 	glutReshapeFunc(change_size);
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
-	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
+	bool stream_enabled = true; // Whether or not to display streaming window for testing purposes
 								 // If I ever implement multithreading, then I might be able to turn this on permanently
 	bool stream_only = false; // Enable just for camera testing without any motion
 	bool console_enabled = false; // Enable to allow access to the console to send G-code manually to the Arduino
@@ -287,6 +292,11 @@ int main()//(array<System::String ^> ^args)
 				getchar();
 				continue;
 			}
+
+			if (video_counter == 0)
+				video.write(capped_frame);
+			video_counter = (video_counter + 1) % 5;
+
 			grbl_query_thread->Join();
 			grbl_status = grbl_query->grbl_status;
 			if (!ready_to_send_next_move_cmd)
@@ -300,7 +310,7 @@ int main()//(array<System::String ^> ^args)
 			// Blur to reduce noise
 			blur(processed_frame, processed_frame, Size(10, 10));
 			// Threshold to convert to binary image for easier contouring
-			int binary_threshold = 100; // out of 255
+			int binary_threshold = 128; // out of 255
 			threshold(processed_frame, processed_frame, binary_threshold, 255, CV_THRESH_BINARY);
 
 			// Detect edges (I don't think the thresholds are that important here since the image has already been binarized. However, they are mandatory for the function call)
@@ -354,9 +364,9 @@ int main()//(array<System::String ^> ^args)
 				dy = last_dy = object_coord.y - origin.y; // Offset of the object centroid in y
 				dr = last_dr = sqrt(dx*dx + dy*dy);
 
-				// The 25 is a pixel-to-mm scaling factor (needs to be updated with final mount)
-				fly_position.x = grbl_status.x - dx/25;
-				fly_position.y = grbl_status.y + dy/25;
+				// The 4.08 is a pixel-to-mm scaling factor (needs to be updated with final mount)
+				fly_position.x = grbl_status.x - dx/4.08;
+				fly_position.y = grbl_status.y + dy/4.08;
 
 				if (get_counter() - screen_update_timer >= 8)
 				{

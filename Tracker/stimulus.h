@@ -1,3 +1,5 @@
+extern int window1, window2, window3, window4;
+
 struct FlyPosition
 {
 	double x=0;
