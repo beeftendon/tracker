@@ -1,3 +1,9 @@
+ref class Arduino
+{
+public:
+
+};
+
 // Stuff for storing grbl status upon query command ("?")
 public value struct GrblStatus
 {
