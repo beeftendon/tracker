@@ -109,7 +109,7 @@ int main()//(array<System::String ^> ^args)
 	arduino = gcnew SerialPort(port_name, baud_rate);
 	arduino->Open();
 
-	// Motor parameters
+	// Motor parameters (for Grbl)
 	double steps_per_mm_x = 40;
 	double steps_per_mm_y = 40;
 	
@@ -128,12 +128,13 @@ int main()//(array<System::String ^> ^args)
 	Mat processed_frame; // This is the one that will be processed and used to find contours on
 	
 	VideoCapture vid_cap(CV_CAP_ANY); // This is sufficient for a single camera setup. Otherwise, it will need to be more specific.
-	vid_cap.set(CV_CAP_PROP_FPS, 480); // Need to set the exposure time to appropriate value in Pylon Viewer as well
+	vid_cap.set(CV_CAP_PROP_FPS, 240); // Need to set the exposure time to appropriate value in Pylon Viewer as well
 	vid_cap.set(CV_CAP_PROP_FRAME_HEIGHT, 200); // 200x200 window
 	vid_cap.set(CV_CAP_PROP_FRAME_WIDTH, 200);
 
 	initialize_grbl(arduino);
 
+	/* 
 	// This is bullshit I don't know why it works
 	char *myargv[1];
 	int myargc = 1;
@@ -148,11 +149,13 @@ int main()//(array<System::String ^> ^args)
 	window2 = glutCreateWindow("Window 2");
 	glutDisplayFunc(draw_cylinder_bars);
 	glutReshapeFunc(change_size);
+	*/
+	
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
-	bool stream_enabled = true; // Whether or not to display streaming window for testing purposes
+	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
 								 // If I ever implement multithreading, then I might be able to turn this on permanently
-	bool stream_only = false; // Enable just for camera testing without any motion
+	bool stream_only = true; // Enable just for camera testing without any motion
 	bool console_enabled = false; // Enable to allow access to the console to send G-code manually to the Arduino
 								  // Streaming will be gimped if it's enabled at the same time (until I enable multithreading)
 
@@ -310,7 +313,7 @@ int main()//(array<System::String ^> ^args)
 			// Blur to reduce noise
 			blur(processed_frame, processed_frame, Size(10, 10));
 			// Threshold to convert to binary image for easier contouring
-			int binary_threshold = 128; // out of 255
+			int binary_threshold = 200; // out of 255
 			threshold(processed_frame, processed_frame, binary_threshold, 255, CV_THRESH_BINARY);
 
 			// Detect edges (I don't think the thresholds are that important here since the image has already been binarized. However, they are mandatory for the function call)
@@ -368,11 +371,13 @@ int main()//(array<System::String ^> ^args)
 				fly_position.x = grbl_status.x - dx/4.08;
 				fly_position.y = grbl_status.y + dy/4.08;
 
+				/* This should be uncommented later when OpenGL stuff is working again
 				if (get_counter() - screen_update_timer >= 8)
 				{
 					glutMainLoopEvent();
 					screen_update_timer = get_counter();
 				}
+				*/
 
 				is_following = true;
 			}
@@ -387,6 +392,7 @@ int main()//(array<System::String ^> ^args)
 					is_following = false; //Just do this once because if it can't find the object anymore then I don't want the thing crashing into the hard stop
 				}
 			}
+
 			data_input_time_file << get_counter() - data_input_timer << ", ";
 			data_input_timer = get_counter();
 

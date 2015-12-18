@@ -84,7 +84,7 @@ void draw_cylinder_bars()
 	//glutPostRedisplay();
 	//glutSwapBuffers();
 	
-	glutSetWindow(window2);
+	//glutSetWindow(window2);
 	
 	//gluLookAt(0, 0, 200, 0, 0, -9999999999, 0, 1, 0);
 	//glFrustum(-frustum_width / 2, frustum_width / 2, -(frustum_width*aspect_ratio) / 2, (frustum_width*aspect_ratio) / 2, 100, 10000.0);
