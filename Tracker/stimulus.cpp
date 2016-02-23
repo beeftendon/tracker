@@ -46,7 +46,7 @@ void draw_cylinder_bars()
 	double r = 100; // arbitrary radius, doesn't matter for now since everything else is in degrees
 	double added; // 090302, added this to get rid of stimrot.mean rotation, not useful for me here...
 
-	glutSetWindow(window1);
+	//glutSetWindow(window1);
 	
 	gluLookAt(fly_position.x, 0, fly_position.y, 0, 0, -9999999999, 0, 1, 0);
 	glFrustum(-frustum_width / 2, frustum_width / 2, -(frustum_width*aspect_ratio) / 2, (frustum_width*aspect_ratio) / 2, 100, 10000.0);
@@ -79,7 +79,7 @@ void draw_cylinder_bars()
 
 
 		//TrackStim::drawWedge(i*(2 * width) - width / 2 + added, width);
-	};
+	}
 
 	//glutPostRedisplay();
 	//glutSwapBuffers();
@@ -99,8 +99,8 @@ void draw_cylinder_bars()
 	glVertex3f(50, 50, -10); // top right
 	glEnd();
 	*/
-	glutSetWindow(window1);
-	glutPostRedisplay();
+	//glutSetWindow(window1);
+	//glutPostRedisplay();
 
 	glutSwapBuffers();
 	

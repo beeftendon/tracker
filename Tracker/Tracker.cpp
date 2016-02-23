@@ -134,7 +134,6 @@ int main()//(array<System::String ^> ^args)
 
 	initialize_grbl(arduino);
 
-	/* 
 	// This is bullshit I don't know why it works
 	char *myargv[1];
 	int myargc = 1;
@@ -149,7 +148,14 @@ int main()//(array<System::String ^> ^args)
 	window2 = glutCreateWindow("Window 2");
 	glutDisplayFunc(draw_cylinder_bars);
 	glutReshapeFunc(change_size);
-	*/
+	window3 = glutCreateWindow("Window 3");
+	glutDisplayFunc(draw_cylinder_bars);
+	glutReshapeFunc(change_size);
+	window4 = glutCreateWindow("Window 4");
+	glutDisplayFunc(draw_cylinder_bars);
+	glutReshapeFunc(change_size);
+
+	glutMainLoopEvent();
 	
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
@@ -235,43 +241,43 @@ int main()//(array<System::String ^> ^args)
 			grbl_query_thread->Name = "grbl_query";
 			grbl_query_thread->Start();
 
-			/*
+			
 
-			arduino_tx(arduino, "?"); // Query Grbl status
-			data_input_time_file << get_counter() - data_input_timer << ", ";
+			//arduino_tx(arduino, "?"); // Query Grbl status
+			//data_input_time_file << get_counter() - data_input_timer << ", ";
 
-			SysString^ query_status_response;
-			int grbl_state = 0;
+			//SysString^ query_status_response;
+			//int grbl_state = 0;
 
-			data_input_timer = get_counter();
-			do
-			{
-				query_status_response = arduino_rx(arduino);
-				if (query_status_response->Equals("ok\r"))
-				{
-					ready_to_send_next_move_cmd = true;
-				}
-				else
-				{
-					grbl_status = parse_grbl_status(query_status_response);
-				}
-			} while (query_status_response->Equals("ok\r"));
+			//data_input_timer = get_counter();
+			//do
+			//{
+			//	query_status_response = arduino_rx(arduino);
+			//	if (query_status_response->Equals("ok\r"))
+			//	{
+			//		ready_to_send_next_move_cmd = true;
+			//	}
+			//	else
+			//	{
+			//		grbl_status = parse_grbl_status(query_status_response);
+			//	}
+			//} while (query_status_response->Equals("ok\r"));
 
-			if (query_status_response->Contains("Idle"))
-			{
-				grbl_state = GRBL_STATE_IDLE;
-			}
-			else if (query_status_response->Contains("Run"))
-			{
-				grbl_state = GRBL_STATE_RUN;
-			}
-			else
-			{
-				Console::WriteLine(query_status_response);
-				getchar();
-				goto exit_main_loop;
-			}
-			*/
+			//if (query_status_response->Contains("Idle"))
+			//{
+			//	grbl_state = GRBL_STATE_IDLE;
+			//}
+			//else if (query_status_response->Contains("Run"))
+			//{
+			//	grbl_state = GRBL_STATE_RUN;
+			//}
+			//else
+			//{
+			//	Console::WriteLine(query_status_response);
+			//	getchar();
+			//	goto exit_main_loop;
+			//}
+			//
 			
 			position_file << get_counter() << ", " << grbl_status.state << ", " << grbl_status.x << ", " << grbl_status.y << "\n";
 			data_input_time_file << get_counter() - data_input_timer << ", ";
