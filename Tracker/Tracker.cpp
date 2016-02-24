@@ -140,28 +140,50 @@ int main()//(array<System::String ^> ^args)
 	myargv[0] = _strdup("Myappname");
 	glutInit(&myargc, myargv);
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-	glutInitWindowPosition(100, 100);
 	glutInitWindowSize(640, 360);
+	
+	glutInitWindowPosition(200,200);
 	window1 = glutCreateWindow("Window 1");
 	glutDisplayFunc(draw_cylinder_bars);
+	//glutIdleFunc(draw_cylinder_bars);
 	glutReshapeFunc(change_size);
+	
+	glutInitWindowPosition(840, 200);
 	window2 = glutCreateWindow("Window 2");
 	glutDisplayFunc(draw_cylinder_bars);
+	//glutIdleFunc(draw_cylinder_bars);
 	glutReshapeFunc(change_size);
+	
+	glutInitWindowPosition(200, 560);
 	window3 = glutCreateWindow("Window 3");
 	glutDisplayFunc(draw_cylinder_bars);
+	//glutIdleFunc(draw_cylinder_bars);
 	glutReshapeFunc(change_size);
+	
+	glutInitWindowPosition(840, 560);
 	window4 = glutCreateWindow("Window 4");
 	glutDisplayFunc(draw_cylinder_bars);
+	//glutIdleFunc(draw_cylinder_bars);
 	glutReshapeFunc(change_size);
 
 	glutMainLoopEvent();
+
+	//glutSetWindow(window1);
+	//glutPostRedisplay();
+	//glutSetWindow(window2);
+	//glutPostRedisplay();
+	//glutSetWindow(window3);
+	//glutPostRedisplay();
+	//glutSetWindow(window4);
+	//glutPostRedisplay();
+
+	//glutMainLoopEvent();
 	
 
 	// @@@@@@ MAIN LOOP SETUP @@@@@@
 	bool stream_enabled = false; // Whether or not to display streaming window for testing purposes
 								 // If I ever implement multithreading, then I might be able to turn this on permanently
-	bool stream_only = true; // Enable just for camera testing without any motion
+	bool stream_only = false; // Enable just for camera testing without any motion
 	bool console_enabled = false; // Enable to allow access to the console to send G-code manually to the Arduino
 								  // Streaming will be gimped if it's enabled at the same time (until I enable multithreading)
 
@@ -169,7 +191,7 @@ int main()//(array<System::String ^> ^args)
 	GrblQuery^ grbl_query = gcnew GrblQuery(arduino);
 
 
-	bool is_following = false; // for use when the contour leaves the frame
+	bool is_following = true; // for use when the contour leaves the frame
 	bool ready_to_send_next_move_cmd = true;
 	bool first_query = true;
 	UINT64 loop_counter = 0; // Counter for testing purposes
@@ -377,13 +399,21 @@ int main()//(array<System::String ^> ^args)
 				fly_position.x = grbl_status.x - dx/4.08;
 				fly_position.y = grbl_status.y + dy/4.08;
 
-				/* This should be uncommented later when OpenGL stuff is working again
 				if (get_counter() - screen_update_timer >= 8)
 				{
+					glutSetWindow(window1);
+					glutPostRedisplay();
+					glutSetWindow(window2);
+					glutPostRedisplay();
+					glutSetWindow(window3);
+					glutPostRedisplay();
+					glutSetWindow(window4);
+					glutPostRedisplay();
+					
 					glutMainLoopEvent();
+
 					screen_update_timer = get_counter();
 				}
-				*/
 
 				is_following = true;
 			}
